@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>OneTap Morning — Blackout</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#000000">
+<style>
+  :root{
+    --bg:#000; --card:#0a0a0a; --line:#1c1c1c; --muted:#b0b3c6; --text:#f6f7fb;
+    --ok:#38e08f; --warn:#ffd166; --bad:#ff4d6d; --acc:#8a7bff;
+  }
+  *{box-sizing:border-box;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto}
+  html,body{height:100%}
+  body{
+    margin:0;color:var(--text);background:#000;
+    background-image:
+      radial-gradient(800px 500px at 20% -10%, #121212 0%, transparent 60%),
+      radial-gradient(900px 600px at 120% 0%, #121212 0%, transparent 60%),
+      radial-gradient(700px 500px at 50% 120%, #121212 0%, transparent 60%);
+  }
+  header{
+    position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;justify-content:space-between;
+    padding:14px 16px;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)
+  }
+  h1{margin:0;font-size:18px;letter-spacing:.2px}
+  .wrap{max-width:560px;margin:0 auto;padding:16px}
+  .card{background:linear-gradient(180deg,#0b0b0b,#070707);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.35)}
+  .center{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .chip,.toggle{
+    padding:10px 14px;border-radius:999px;border:1px solid var(--line);
+    background:#0e0e0e;font-weight:800;font-size:14px;cursor:pointer;user-select:none
+  }
+  .chip.active,.toggle.active{outline:2px solid var(--acc);box-shadow:0 0 0 4px rgba(138,123,255,.15)}
+  .toggle span{opacity:.8;font-weight:600}
+  .badge{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:#0e0e0e}
+  .sub{font-size:14px;color:var(--muted)}
+  .mono{font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  button{
+    width:100%;padding:18px;border-radius:14px;border:1px solid var(--line);
+    background:linear-gradient(180deg,#121212,#0c0c0c);color:var(--text);font-size:20px;font-weight:800
+  }
+  button.big{font-size:28px;padding:22px}
+  button.ok{background:linear-gradient(180deg,#0f2b1e,#0a1f16);border-color:#133a2a}
+  button.ok:active{transform:scale(.995)}
+  button.ghost{background:#0e0e0e}
+  .timer{font-size:60px;font-weight:900;letter-spacing:.5px}
+  .step{font-size:28px;font-weight:900}
+  .bar{height:14px;background:#0a0a0a;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+  .fill{height:100%;width:0%;
+    background:conic-gradient(from 0deg, #38e08f, #ffd166, #ff4d6d 70%);
+    transition:width .25s
+  }
+  .sbar{height:8px;background:#0a0a0a;border:1px solid var(--line);border-radius:999px;overflow:hidden;width:100%}
+  .sfill{height:100%;width:100%;background:linear-gradient(90deg,#8a7bff,#38e08f);transition:width .2s}
+  .score{font-size:18px;font-weight:800}
+  .hint{font-size:13px;color:#d5d9ff}
+  .confetti{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+  .dot{position:absolute;width:8px;height:8px;border-radius:50%}
+</style>
+</head>
+<body>
+<header>
+  <h1>OneTap Morning</h1>
+  <div class="badge" id="targetBadge">Ziel: 90 Min (+Puffer)</div>
+</header>
+
+<div class="wrap">
+  <!-- Idle -->
+  <section id="idle" class="card center">
+    <div class="score">Streak: <span id="streak">0</span> 🔥</div>
+    <div class="sub">Ein Tap. Ein Flow. Schwarz. Fokus.</div>
+
+    <div class="row" id="targets">
+      <div class="chip" data-min="30">30 Min</div>
+      <div class="chip" data-min="60">60 Min</div>
+      <div class="chip active" data-min="90">90 Min</div>
+    </div>
+
+    <div class="row">
+      <div class="toggle active" id="tToilette">🚽 Toilette <span>(an)</span></div>
+      <div class="toggle active" id="tHaare">💇‍♂️ Haare <span>(an)</span></div>
+      <div class="toggle" id="tBibel">📖 Bibel <span>(aus)</span></div>
+    </div>
+
+    <button class="big ok" id="startBtn">START</button>
+    <div class="row">
+      <button class="ghost" id="testBtn">🔔 Test</button>
+      <button class="ghost" id="resetStreak">Streak zurücksetzen</button>
+    </div>
+    <div class="sub">Matcha/Frühstück & Haushalt nur, wenn Zeit übrig ist.</div>
+  </section>
+
+  <!-- Run -->
+  <section id="run" class="card center" style="display:none">
+    <div class="sub">Verbleibend bis „raus“</div>
+    <div class="timer mono" id="eta">--:--</div>
+    <div class="bar"><div class="fill" id="etaFill"></div></div>
+
+    <div class="sub" style="margin-top:12px">Jetzt</div>
+    <div class="step" id="stepName">–</div>
+    <div class="sbar"><div class="sfill" id="stepFill"></div></div>
+    <div class="timer mono" id="stepTimer">00:00</div>
+
+    <button class="ok" id="doneBtn">FERTIG ✓</button>
+    <div class="row">
+      <div class="chip" id="skipBtn">Überspringen →</div>
+      <div class="chip" id="pauseBtn">Pause ▌▌</div>
+      <div class="chip" id="panicBtn" style="border-color:#3b0d17;background:linear-gradient(180deg,#1a0b0f,#12070b);color:#ffd1d8">Notmodus</div>
+    </div>
+    <div class="hint" id="hint">Als Nächstes: –</div>
+  </section>
+
+  <!-- Done -->
+  <section id="done" class="card center" style="display:none">
+    <div class="step">Geschafft! 🚪</div>
+    <div class="timer mono" id="finishMsg">JETZT LOS</div>
+    <div class="score">Streak: <span id="streak2">0</span> 🔥 · Punkte: <span id="pts">0</span></div>
+    <button id="againBtn">Nochmal</button>
+  </section>
+</div>
+
+<div class="confetti" id="confetti"></div>
+
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  // UI
+  const idle=$("#idle"), run=$("#run"), done=$("#done");
+  const startBtn=$("#startBtn"), testBtn=$("#testBtn"), resetStreak=$("#resetStreak");
+  const doneBtn=$("#doneBtn"), skipBtn=$("#skipBtn"), pauseBtn=$("#pauseBtn"), panicBtn=$("#panicBtn"), againBtn=$("#againBtn");
+  const eta=$("#eta"), etaFill=$("#etaFill"), stepName=$("#stepName"), stepTimer=$("#stepTimer"), stepFill=$("#stepFill"), hint=$("#hint"), targetBadge=$("#targetBadge");
+  const confetti=$("#confetti"), streakEl=$("#streak"), streak2=$("#streak2"), ptsEl=$("#pts");
+  const targets=$("#targets");
+  const tToilette=$("#tToilette"), tHaare=$("#tHaare"), tBibel=$("#tBibel");
+
+  // Base (Sekunden)
+  const BASE = [
+    {name:"Aufstehen ⏰", s: 60, key:"aufstehen"},
+    {name:"Toilette 🚽", s:1800, key:"toilette"},
+    {name:"Duschen & abtrocknen 🚿", s:600, key:"duschen"},
+    {name:"Zähne putzen 🪥", s:240, key:"zaehne"},
+    {name:"Outfit 👕", s:300, key:"outfit"},
+    {name:"Bibel 📖", s:900, key:"bibel"},
+    {name:"Haare 💇‍♂️", s:480, key:"haare"},
+    {name:"Rucksack packen 🎒", s:180, key:"packen"},
+    {name:"Matcha/Frühstück ☕️🍳", s:300, key:"matcha", optional:true},
+    {name:"Haushalt 🧼", s:600, key:"haushalt", optional:true},
+  ];
+
+  // State
+  let targetMin = Number(localStorage.getItem("otm_target")||90);
+  let useToilette=true, useHaare=true, useBibel=false;
+  let steps=[], idx=0, stepLeft=0, totalMs=0, startTime=0, targetTime=0, tickId=null, paused=false, pauseAt=0, points=0;
+
+  // Helpers
+  const mmss=ms=>{const n=Math.max(0,Math.round(ms/1000));const m=Math.floor(n/60),s=n%60;return String(m).padStart(2,"0")+":"+String(s).padStart(2,"0");};
+  function setVisible(el,vis){ el.style.display = vis ? "" : "none"; }
+  function haptics(){try{if("vibrate" in navigator) navigator.vibrate([50,60,50]);}catch{}}
+  function chime(freq=960,dur=.34){
+    try{
+      const ctx=new (window.AudioContext||window.webkitAudioContext)();
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.type="triangle"; o.frequency.value=freq; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001,ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.32,ctx.currentTime+.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+dur); o.start(); o.stop(ctx.currentTime+dur+.02);
+    }catch{}
+  }
+  function confettiBurst(){
+    for(let k=0;k<50;k++){
+      const d=document.createElement("div"); d.className="dot";
+      d.style.left=(Math.random()*100)+"%"; d.style.top="50%";
+      d.style.background=`hsl(${Math.random()*360},85%,60%)`;
+      const dx=(Math.random()-0.5)*260, dy=(-Math.random()*260-90);
+      d.animate([{transform:"translate(0,0)",opacity:1},{transform:`translate(${dx}px,${dy}px)`,opacity:0}],{duration:900+Math.random()*700,easing:"cubic-bezier(.2,.7,.2,1)"});
+      confetti.appendChild(d); setTimeout(()=>d.remove(),1700);
+    }
+    haptics(); chime(1040,.32);
+  }
+
+  // Streak
+  function todayKey(){const d=new Date();return d.toISOString().slice(0,10);}
+  function loadStreak(){return JSON.parse(localStorage.getItem("otm_streak")||"{}");}
+  function showStreak(){const s=loadStreak();streakEl.textContent=s.count||0;streak2.textContent=s.count||0;}
+  function bumpStreak(){const s=loadStreak();const k=todayKey();if(s.last!==k){s.count=(s.count||0)+1;s.last=k;localStorage.setItem("otm_streak",JSON.stringify(s));}return s.count;}
+
+  function sumSeconds(list){ return list.reduce((a,x)=>a+x.s,0); }
+
+  // Planung
+  function plan(){
+    let base = BASE.filter(x=>{
+      if(x.key==="toilette" && !useToilette) return false;
+      if(x.key==="haare"    && !useHaare) return false;
+      if(x.key==="bibel"    && !useBibel) return false;
+      return !x.optional;
+    }).map(x=>({...x}));
+
+    let targetSec = targetMin*60;
+    let perStepFactor = 1.0, bufferFactor = 1.0;
+
+    if(targetMin===90){
+      perStepFactor = 0.9;   // ~10% kürzer pro Schritt
+      bufferFactor  = 1.10;  // ~10% Puffer global
+    } else if(targetMin===60){
+      perStepFactor = Math.max(0.3, 60*60 / sumSeconds(base));
+      bufferFactor  = 1.05;
+    } else if(targetMin===30){
+      base = BASE.filter(x=>{
+        const keep = ["aufstehen","duschen","outfit","packen"].includes(x.key) ||
+                     (x.key==="toilette" && useToilette);
+        return keep;
+      }).map(x=>({...x}));
+      perStepFactor = Math.max(0.3, 30*60 / sumSeconds(base));
+      bufferFactor  = 1.02;
+    }
+
+    base = base.map(x=>({ ...x, s: Math.max(30, Math.round(x.s*perStepFactor)) }));
+
+    // Optionale hinzufügen, wenn Platz
+    let total = sumSeconds(base);
+    const room = Math.round(targetSec - total);
+    for(const opt of BASE.filter(x=>x.optional)){
+      if(room - opt.s >= 0){ base.push({...opt}); total += opt.s; }
+    }
+
+    totalMs  = Math.round(total * bufferFactor) * 1000;
+    startTime= Date.now();
+    targetTime = startTime + totalMs;
+
+    steps = base;
+    idx=0;
+    stepLeft = steps[0].s*1000;
+
+    targetBadge.textContent = `Ziel: ${targetMin} Min` + (targetMin===90?" (+Puffer)":"");
+  }
+
+  // UI
+  function showIdle(){ setVisible(idle,true); setVisible(run,false); setVisible(done,false); showStreak(); updateChips(); updateToggles(); }
+  function showRun(){ setVisible(idle,false); setVisible(run,true); setVisible(done,false); renderStep(); if(tickId) clearInterval(tickId); tickId=setInterval(tick,200); document.body.requestFullscreen?.().catch(()=>{}); }
+  function showDone(){ setVisible(idle,false); setVisible(run,false); setVisible(done,true); const s=bumpStreak(); streak2.textContent=s; ptsEl.textContent=points; }
+
+  function renderStep(){
+    const cur=steps[idx];
+    stepName.textContent=cur.name;
+    stepTimer.textContent=mmss(stepLeft);
+    stepFill.style.width="100%";
+    hint.textContent = (idx+1<steps.length) ? "Als Nächstes: "+steps[idx+1].name : "Letzter Schritt!";
+  }
+
+  function tick(){
+    if(paused) return;
+    const now=Date.now();
+    const remainAll = Math.max(0, targetTime - now);
+    eta.textContent = remainAll<=0 ? "JETZT LOS!" : mmss(remainAll);
+    const pct = 1 - (remainAll/totalMs);
+    etaFill.style.width = (Math.max(0,Math.min(1,pct))*100).toFixed(1)+"%";
+
+    stepLeft -= 200;
+    stepFill.style.width = Math.max(0, (stepLeft / (steps[idx].s*1000)) * 100).toFixed(1) + "%";
+
+    if(stepLeft<=0){
+      points += 10;
+      confettiBurst();
+      nextStep();
+    }
+  }
+
+  function nextStep(){
+    idx++;
+    if(idx>=steps.length){
+      clearInterval(tickId);
+      eta.textContent="JETZT LOS!"; etaFill.style.width="100%";
+      showDone(); chime(1080,.38);
+      return;
+    }
+    stepLeft = steps[idx].s*1000;
+    renderStep();
+  }
+
+  // Events
+  startBtn.onclick = ()=>{ plan(); points=0; paused=false; showRun(); };
+  doneBtn.onclick  = ()=>{ points += 15; confettiBurst(); nextStep(); };
+  skipBtn.onclick  = ()=>{ points += 2; nextStep(); };
+  pauseBtn.onclick = ()=>{
+    if(!paused){ paused=true; pauseAt=Date.now(); pauseBtn.textContent="Weiter ▶"; }
+    else{ paused=false; const pausedMs=Date.now()-pauseAt; startTime+=pausedMs; targetTime+=pausedMs; pauseBtn.textContent="Pause ▌▌"; }
+  };
+  panicBtn.onclick = ()=>{
+    const fast = ["Rucksack packen 🎒","Schuhe an 👟"];
+    steps = fast.map(n=>({name:n,s:60}));
+    idx=0; stepLeft=steps[0].s*1000;
+    const now=Date.now(); totalMs = steps.reduce((a,x)=>a+x.s*1000,0); startTime=now; targetTime=now+totalMs;
+    renderStep();
+  };
+  againBtn.onclick = showIdle;
+
+  // Targets
+  function updateChips(){
+    [...targets.children].forEach(ch=>{
+      const m=Number(ch.dataset.min);
+      ch.classList.toggle("active", m===targetMin);
+    });
+    targetBadge.textContent = `Ziel: ${targetMin} Min` + (targetMin===90?" (+Puffer)":"");
+  }
+  targets.addEventListener("click",(e)=>{
+    const el=e.target.closest(".chip"); if(!el) return;
+    targetMin = Number(el.dataset.min||targetMin);
+    localStorage.setItem("otm_target", String(targetMin));
+    updateChips();
+  });
+
+  // Toggles
+  function toggleBtn(btn, flag){ btn.classList.toggle("active", flag); btn.querySelector("span").textContent = flag?"(an)":"(aus)"; }
+  function updateToggles(){ toggleBtn(tToilette,useToilette); toggleBtn(tHaare,useHaare); toggleBtn(tBibel,useBibel); }
+  tToilette.onclick = ()=>{ useToilette=!useToilette; updateToggles(); };
+  tHaare.onclick    = ()=>{ useHaare=!useHaare; updateToggles(); };
+  tBibel.onclick    = ()=>{ useBibel=!useBibel; updateToggles(); };
+
+  // Test + Streak
+  testBtn.onclick = ()=>{ chime(); haptics(); confettiBurst(); };
+  resetStreak.onclick = ()=>{ localStorage.removeItem("otm_streak"); showStreak(); };
+
+  // Service Worker registrieren (für Offline/PWA).
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+
+  // runtime vars
+  var paused=false, pauseAt=0, tickId=null;
+
+  // init
+  showIdle();
+})();
+</script>
+</body>
+</html>
